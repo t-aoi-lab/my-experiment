@@ -1,119 +1,144 @@
- .container {
-        text-align: center;
-        padding: 2rem;
-        background-color: white;
-        border-radius: 16px;
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
-    }
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心理学実験室</title>
+    <style>
+        /* Base styles */
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5; /* Light gray background */
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            color: #333;
+        }
 
-    /* 画面中央に大きな文字で表示いたします */
-    h1 {
-        font-size: 2.5rem;
-        margin-bottom: 2rem;
-        color: #1a1a1a;
-    }
+        /* Container for central alignment */
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background-color: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            max-width: 90%;
+            width: 500px;
+        }
 
-    /* 青いボタンのスタイリングでございます */
-    .start-button {
-        background-color: #007bff;
-        color: white;
-        border: none;
-        padding: 15px 40px;
-        font-size: 1.2rem;
-        font-weight: bold;
-        border-radius: 50px;
-        cursor: pointer;
-        transition: background-color 0.3s, transform 0.2s;
-        box-shadow: 0 4px 6px rgba(0, 123, 255, 0.2);
-    }
+        /* Large heading */
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            font-weight: 700;
+            color: #1a1a1a;
+        }
 
-    .start-button:hover {
-        background-color: #0056b3;
-        transform: translateY(-2px);
-    }
+        /* Primary blue button */
+        .start-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 6px rgba(0, 123, 255, 0.2);
+        }
 
-    .start-button:active {
-        transform: translateY(0);
-    }
+        .start-button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
 
-    /* アラートの代わりのメッセージボックス用のスタイル */
-    #custom-alert {
-        display: none;
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: white;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-        z-index: 1000;
-        text-align: center;
-        min-width: 300px;
-    }
+        .start-button:active {
+            transform: translateY(0);
+        }
 
-    #overlay {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        z-index: 999;
-    }
+        /* Custom Modal (Alternative to alert) */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
 
-    .close-btn {
-        margin-top: 1.5rem;
-        background: #333;
-        color: white;
-        border: none;
-        padding: 8px 20px;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-</style>
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            animation: fadeIn 0.3s ease;
+        }
 
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
 
+        .close-btn {
+            margin-top: 1.5rem;
+            padding: 8px 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>心理学実験室へようこそ</h1>
-    <button class="start-button" id="startBtn">実験を開始する</button>
-</div>
+    <div class="container">
+        <h1>心理学実験室へようこそ</h1>
+        <button id="startBtn" class="start-button">実験を開始する</button>
+    </div>
 
-<!-- カスタムメッセージボックス（ブラウザのalertの代わり） -->
-<div id="overlay"></div>
-<div id="custom-alert">
-    <p style="font-size: 1.5rem; margin: 0;">Hello World!</p>
-    <button class="close-btn" id="closeBtn">閉じる</button>
-</div>
+    <!-- Modal for custom alert message -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal-content">
+            <p id="modalMessage" style="font-size: 1.5rem; margin: 0;">Hello World!</p>
+            <button id="closeBtn" class="close-btn">閉じる</button>
+        </div>
+    </div>
 
-<script>
-    // DOMの読み込みを待ってから実行いたします
-    document.addEventListener('DOMContentLoaded', () => {
-        const startBtn = document.getElementById('startBtn');
-        const closeBtn = document.getElementById('closeBtn');
-        const alertBox = document.getElementById('custom-alert');
-        const overlay = document.getElementById('overlay');
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const startBtn = document.getElementById('startBtn');
+            const modalOverlay = document.getElementById('modalOverlay');
+            const closeBtn = document.getElementById('closeBtn');
 
-        // ボタンが押された時の処理でございます
-        startBtn.addEventListener('click', () => {
-            // 本来は alert('Hello World!') ですが、
-            // より美しいUIのためにカスタムボックスを表示いたしますわ
-            alertBox.style.display = 'block';
-            overlay.style.display = 'block';
+            // Handle button click
+            startBtn.addEventListener('click', () => {
+                // Show custom modal instead of window.alert() for better UI
+                modalOverlay.style.display = 'flex';
+                console.log('Experiment started');
+            });
+
+            // Handle close modal
+            closeBtn.addEventListener('click', () => {
+                modalOverlay.style.display = 'none';
+            });
+
+            // Close modal when clicking outside content
+            modalOverlay.addEventListener('click', (e) => {
+                if (e.target === modalOverlay) {
+                    modalOverlay.style.display = 'none';
+                }
+            });
         });
-
-        // 閉じるボタンの処理
-        closeBtn.addEventListener('click', () => {
-            alertBox.style.display = 'none';
-            overlay.style.display = 'none';
-        });
-    });
-</script>
-
-
+    </script>
 </body>
 </html>
