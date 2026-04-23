@@ -1,0 +1,119 @@
+ .container {
+        text-align: center;
+        padding: 2rem;
+        background-color: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    }
+
+    /* 画面中央に大きな文字で表示いたします */
+    h1 {
+        font-size: 2.5rem;
+        margin-bottom: 2rem;
+        color: #1a1a1a;
+    }
+
+    /* 青いボタンのスタイリングでございます */
+    .start-button {
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: background-color 0.3s, transform 0.2s;
+        box-shadow: 0 4px 6px rgba(0, 123, 255, 0.2);
+    }
+
+    .start-button:hover {
+        background-color: #0056b3;
+        transform: translateY(-2px);
+    }
+
+    .start-button:active {
+        transform: translateY(0);
+    }
+
+    /* アラートの代わりのメッセージボックス用のスタイル */
+    #custom-alert {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        z-index: 1000;
+        text-align: center;
+        min-width: 300px;
+    }
+
+    #overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+    }
+
+    .close-btn {
+        margin-top: 1.5rem;
+        background: #333;
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+</style>
+
+
+</head>
+<body>
+
+<div class="container">
+    <h1>心理学実験室へようこそ</h1>
+    <button class="start-button" id="startBtn">実験を開始する</button>
+</div>
+
+<!-- カスタムメッセージボックス（ブラウザのalertの代わり） -->
+<div id="overlay"></div>
+<div id="custom-alert">
+    <p style="font-size: 1.5rem; margin: 0;">Hello World!</p>
+    <button class="close-btn" id="closeBtn">閉じる</button>
+</div>
+
+<script>
+    // DOMの読み込みを待ってから実行いたします
+    document.addEventListener('DOMContentLoaded', () => {
+        const startBtn = document.getElementById('startBtn');
+        const closeBtn = document.getElementById('closeBtn');
+        const alertBox = document.getElementById('custom-alert');
+        const overlay = document.getElementById('overlay');
+
+        // ボタンが押された時の処理でございます
+        startBtn.addEventListener('click', () => {
+            // 本来は alert('Hello World!') ですが、
+            // より美しいUIのためにカスタムボックスを表示いたしますわ
+            alertBox.style.display = 'block';
+            overlay.style.display = 'block';
+        });
+
+        // 閉じるボタンの処理
+        closeBtn.addEventListener('click', () => {
+            alertBox.style.display = 'none';
+            overlay.style.display = 'none';
+        });
+    });
+</script>
+
+
+</body>
+</html>
