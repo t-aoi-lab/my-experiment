@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ストループ課題 (Stroop Task)</title>
   
-  <!-- -->
   <!-- jsPsych 標準スタイルシートの読み込み (CDN) -->
   <link rel="stylesheet" href="https://unpkg.com/jspsych@7.3.0/css/jspsych.css">
   
@@ -68,40 +67,146 @@
     }
   </style>
 
-  <!-- jsPsych 本体（パッケージルートを指定してリダイレクトさせる、または正しいグローバル版ビルドを明示） -->
+  <!-- jsPsych 本体 -->
   <script src="https://unpkg.com/jspsych@7.3.0"></script>
   <!-- キーボード反応用プラグイン -->
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.2"></script>
   <!-- 全画面切り替え用プラグイン -->
   <script src="https://unpkg.com/@jspsych/plugin-fullscreen@1.2.1"></script>
+  <!-- 参加者情報入力用プラグイン（新規追加） -->
+  <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.2"></script>
 </head>
 <body>
 
   <script>
-    
-    // jsPsychの初期化。実験終了時にCSV形式でデータを画面表示するよう設定
+    // 送信先GASのURL定義
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwiH5tW4Kpl9060Kgm-Il3AuwdR5b2lVhhJXNEwJGumZRBUBiMsYTZPKBIWclQkeJMANQ/exec";
+
+    // 指数バックオフを組み込んだデータ送信関数
+    function sendDataWithBackoff(csvData, displayElement, retries = 5, delay = 1000) {
+      fetch(GAS_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain" // CORSのプレフライト(OPTIONS)回避のため text/plain で送信
+        },
+        body: csvData
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("サーバーエラーが発生しました。");
+        }
+        // 送信成功時の表示
+        displayElement.innerHTML = `
+          <div style="text-align: center; margin-top: 50px;">
+            <h3>データの送信が完了しました。</h3>
+            <p>ご協力ありがとうございました。ブラウザを閉じても構いません。</p>
+          </div>
+        `;
+      })
+      .catch(error => {
+        if (retries > 0) {
+          displayElement.innerHTML = `
+            <div style="text-align: center; margin-top: 50px;">
+              <h3>データ送信中...</h3>
+              <p>通信エラーのため再試行しています (残り回数: ${retries}回)...</p>
+            </div>
+          `;
+          setTimeout(() => {
+            sendDataWithBackoff(csvData, displayElement, retries - 1, delay * 2);
+          }, delay);
+        } else {
+          // すべての試行が失敗した場合のフォールバック表示
+          displayElement.innerHTML = `
+            <div style="text-align: center; margin-top: 50px; color: #cc0000;">
+              <h3>データの自動送信に失敗しました。</h3>
+              <p>通信環境の良い場所で再度お試しいただくか、実験実施者へ報告してください。</p>
+            </div>
+            <textarea style="width:80%; height:200px; margin-top:20px;" readonly>${csvData}</textarea>
+          `;
+        }
+      });
+    }
+
+    // jsPsychの初期化
     const jsPsych = initJsPsych({
       on_finish: function() {
         // 全画面モードを安全に解除
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(err => console.log(err));
         }
-        // CSV形式で測定データを表示
-        jsPsych.data.displayData('csv');
+
+        // jsPsychが描画に利用しているDOM要素を安全に取得
+        const displayElement = jsPsych.getDisplayElement();
+        displayElement.innerHTML = `
+          <div style="text-align: center; margin-top: 50px;">
+            <h3>実験が終了しました。</h3>
+            <p>データを送信しています。しばらくお待ちください...</p>
+          </div>
+        `;
+
+        // 本番試行(task: 'response')のみをフィルタリング
+        const rawResponseData = jsPsych.data.get().filter({ task: 'response' });
+
+        // 分析に不要なデフォルト列（plugin_data等）を削ぎ落とし、必要な列のみを再構成
+        const cleanedData = rawResponseData.map(function(trial) {
+          return {
+            subject_id: trial.subject_id,
+            timestamp: trial.timestamp,
+            word: trial.word,
+            color: trial.color,
+            condition: trial.condition,
+            rt: trial.rt,
+            // 空欄を回避し、確実に "true" / "false" 文字列を保持
+            correct: trial.correct ? "true" : "false"
+          };
+        });
+
+        // 抽出したオブジェクト配列をCSVフォーマットの文字列に変換
+        const csvString = jsPsych.data.get().convertToCSV(cleanedData);
+
+        // 指数バックオフを伴う自動送信を実行
+        sendDataWithBackoff(csvString, displayElement);
       }
     });
 
-    // タイムライン（実験の流れを格納する配列）の作成
+    // タイムラインの作成
     const timeline = [];
 
-    // 実行環境（iframeやセキュリティポリシー）が全画面表示に対応・許可しているかチェック
+    // (1) 参加者情報（ID）入力画面の追加
+    const p_info_trial = {
+      type: jsPsychSurveyText,
+      questions: [
+        { prompt: "参加者ID（例：学籍番号）を入力してください：", name: "ParticipantID", required: true }
+      ],
+      button_label: "次へ",
+      on_finish: function(data) {
+        // 入力されたIDを取得
+        const id_input = data.response.ParticipantID;
+        // 実験開始のタイムスタンプを生成 (YYYY-MM-DD HH:mm:ss)
+        const now = new Date();
+        const timestamp_str = now.getFullYear() + "-" + 
+          String(now.getMonth() + 1).padStart(2, '0') + "-" + 
+          String(now.getDate()).padStart(2, '0') + " " + 
+          String(now.getHours()).padStart(2, '0') + ":" + 
+          String(now.getMinutes()).padStart(2, '0') + ":" + 
+          String(now.getSeconds()).padStart(2, '0');
+
+        // 以降のすべての試行に「参加者ID」と「タイムスタンプ」を一元的に追加
+        jsPsych.data.addProperties({
+          subject_id: id_input,
+          timestamp: timestamp_str
+        });
+      }
+    };
+    timeline.push(p_info_trial);
+
+    // 全画面表示対応チェック
     const isFullscreenPermitted = document.fullscreenEnabled || 
                                   document.webkitFullscreenEnabled || 
                                   document.mozFullScreenEnabled || 
                                   document.msFullscreenEnabled;
 
     if (isFullscreenPermitted) {
-      // 全画面表示が可能な通常環境の場合
       const fullscreen_trial = {
         type: jsPsychFullscreen,
         fullscreen_mode: true,
@@ -115,7 +220,6 @@
       };
       timeline.push(fullscreen_trial);
     } else {
-      // 埋め込み環境など、全画面化の権限ポリシーが制限されている場合の代替試行
       const skip_fullscreen_trial = {
         type: jsPsychHtmlKeyboardResponse,
         stimulus: `
@@ -155,10 +259,9 @@
           </p>
         </div>
       `,
-      choices: [' '] // スペースキーのみ受け付ける
+      choices: [' ']
     };
     timeline.push(instructions);
-
 
     // 要因計画: 「文字」と「色」の組み合わせの定義
     const stimuli_pool = [
@@ -176,15 +279,15 @@
       { word: "緑", color: "blue", condition: "incongruent", correct_response: "b" }
     ];
 
-    // プールされた刺激から重複を許容してランダムに10試行分を抽出
+    // 重複を許容してランダムに10試行分を抽出
     const selected_trials = jsPsych.randomization.sampleWithReplacement(stimuli_pool, 10);
 
     // 3-(a) 注視点表示用の定義 (500ms)
     const fixation = {
       type: jsPsychHtmlKeyboardResponse,
       stimulus: '<div class="fixation-point">+</div>',
-      choices: "NO_KEYS", // キー入力を受け付けない
-      trial_duration: 500, // 500ms表示
+      choices: "NO_KEYS",
+      trial_duration: 500,
       data: { task: 'fixation' }
     };
 
@@ -192,13 +295,12 @@
     const stroop_stimulus = {
       type: jsPsychHtmlKeyboardResponse,
       stimulus: function() {
-        // タイムライン変数から動的にHTMLを生成（文字の色とテキストを適用）
         const word = jsPsych.timelineVariable('word');
         const color = jsPsych.timelineVariable('color');
         return `<div class="stroop-stimulus" style="color: ${color};">${word}</div>`;
       },
-      choices: ['r', 'b', 'g'], // 反応キー
-      trial_duration: null,     // キー入力があるまで無限に表示
+      choices: ['r', 'b', 'g'],
+      trial_duration: null,
       data: {
         task: 'response',
         word: jsPsych.timelineVariable('word'),
@@ -207,8 +309,8 @@
         correct_response: jsPsych.timelineVariable('correct_response')
       },
       on_finish: function(data) {
-        // キー入力をテキストとして記録し、正誤判定を行う
         const response_char = data.response;
+        // 厳密な正誤判定をおこない、真偽値を格納
         data.correct = (response_char === data.correct_response);
       }
     };
@@ -216,21 +318,20 @@
     // 3-(c) 試行間隔 (ITI) 用の定義 (1000ms 空白画面)
     const rest = {
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: '', // 空白
+      stimulus: '',
       choices: "NO_KEYS",
-      trial_duration: 1000, // 1000ms表示
+      trial_duration: 1000,
       data: { task: 'iti' }
     };
 
-
-    // メイン試行ループの構成（注視点 -> 刺激 -> ITI の順で、ランダムに選ばれた10試行を繰り返す）
+    // メイン試行ループの構成
     const main_procedure = {
       timeline: [fixation, stroop_stimulus, rest],
       timeline_variables: selected_trials
     };
     timeline.push(main_procedure);
 
-    // 全ての準備が整い、ドキュメントの読み込みが終わったら実験を開始する
+    // 実験を開始
     window.onload = function() {
       jsPsych.run(timeline);
     };
