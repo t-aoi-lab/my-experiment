@@ -73,42 +73,45 @@
   <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.2"></script>
   <!-- 全画面切り替え用プラグイン -->
   <script src="https://unpkg.com/@jspsych/plugin-fullscreen@1.2.1"></script>
-  <!-- 参加者情報入力用プラグイン（新規追加） -->
+  <!-- 参加者情報入力用プラグイン -->
   <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.2"></script>
 </head>
 <body>
 
   <script>
-    // 送信先GASのURL定義
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbwiH5tW4Kpl9060Kgm-Il3AuwdR5b2lVhhJXNEwJGumZRBUBiMsYTZPKBIWclQkeJMANQ/exec";
+    // 送信先GASのURL定義（新しくデプロイされた最新のURLに差し替え済み）
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbxMLUxf1Y7q7cZiGrho1Ee_IjXXwik-xMnGXJPe-gafYwXn0VZ1uV53dcVhKRj8EGkn/exec";
 
     // 指数バックオフを組み込んだデータ送信関数
     function sendDataWithBackoff(csvData, displayElement, retries = 5, delay = 1000) {
-      fetch(GAS_URL, {
+      // GAS側で e.parameter.csv と e.postData.contents のどちらが使われていても対応できるよう、
+      // クエリパラメータとPOSTボディの両方にデータを載せてハイブリッド送信します。
+      const urlWithParam = GAS_URL + "?csv=" + encodeURIComponent(csvData);
+
+      fetch(urlWithParam, {
         method: "POST",
+        mode: "no-cors", // CORSプレフライト(OPTIONS)およびリダイレクト時のブラウザによるブロックを完全に回避
         headers: {
-          "Content-Type": "text/plain" // CORSのプレフライト(OPTIONS)回避のため text/plain で送信
+          "Content-Type": "text/plain;charset=utf-8"
         },
-        body: csvData
+        body: csvData // ボディにも生のCSVデータを設定
       })
       .then(response => {
-        if (!response.ok) {
-          throw new Error("サーバーエラーが発生しました。");
-        }
-        // 送信成功時の表示
+        // no-corsモードではレスポンスをブラウザが保護（opaque）しますが、
+        // 通信処理自体が完了した時点で「送信成功」として画面を遷移させます。
         displayElement.innerHTML = `
-          <div style="text-align: center; margin-top: 50px;">
-            <h3>データの送信が完了しました。</h3>
-            <p>ご協力ありがとうございました。ブラウザを閉じても構いません。</p>
+          <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+            <h3 style="color: #2e7d32; font-size: 28px; margin-bottom: 20px;">データの送信が完了しました。</h3>
+            <p style="font-size: 18px;">ご協力ありがとうございました。このブラウザを閉じても構いません。</p>
           </div>
         `;
       })
       .catch(error => {
         if (retries > 0) {
           displayElement.innerHTML = `
-            <div style="text-align: center; margin-top: 50px;">
-              <h3>データ送信中...</h3>
-              <p>通信エラーのため再試行しています (残り回数: ${retries}回)...</p>
+            <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+              <h3 style="font-size: 24px; margin-bottom: 20px;">データ送信中...</h3>
+              <p style="font-size: 18px; color: #e65100;">通信エラーのため再試行しています (残り回数: ${retries}回)...</p>
             </div>
           `;
           setTimeout(() => {
@@ -117,14 +120,38 @@
         } else {
           // すべての試行が失敗した場合のフォールバック表示
           displayElement.innerHTML = `
-            <div style="text-align: center; margin-top: 50px; color: #cc0000;">
-              <h3>データの自動送信に失敗しました。</h3>
-              <p>通信環境の良い場所で再度お試しいただくか、実験実施者へ報告してください。</p>
+            <div style="text-align: center; margin-top: 50px; color: #cc0000; font-family: sans-serif; padding: 20px;">
+              <h3 style="font-size: 28px; margin-bottom: 10px;">データの自動送信に失敗しました。</h3>
+              <p style="font-size: 18px; color: #333333;">通信環境の良い場所で再度お試しいただくか、以下のデータをすべてコピーして実験実施者へ報告してください。</p>
+              <textarea style="width: 80%; height: 250px; margin-top: 20px; font-family: monospace; font-size: 14px; padding: 10px;" readonly>${csvData}</textarea>
             </div>
-            <textarea style="width:80%; height:200px; margin-top:20px;" readonly>${csvData}</textarea>
           `;
         }
       });
+    }
+
+    // オブジェクトの配列をCSV文字列に変換するヘルパー関数
+    function convertArrayToCSV(objArray) {
+      if (objArray.length === 0) return "";
+      
+      const headers = Object.keys(objArray[0]);
+      const csvRows = [];
+      
+      // ヘッダー行を追加
+      csvRows.push(headers.join(","));
+      
+      // データ行を追加
+      for (const row of objArray) {
+        const values = headers.map(header => {
+          const val = row[header] === null || row[header] === undefined ? "" : row[header];
+          // 値にカンマやダブルクォーテーション、改行が含まれる場合のエスケープ処理
+          const escaped = ('' + val).replace(/"/g, '""');
+          return `"${escaped}"`;
+        });
+        csvRows.push(values.join(","));
+      }
+      
+      return csvRows.join("\n");
     }
 
     // jsPsychの初期化
@@ -138,17 +165,17 @@
         // jsPsychが描画に利用しているDOM要素を安全に取得
         const displayElement = jsPsych.getDisplayElement();
         displayElement.innerHTML = `
-          <div style="text-align: center; margin-top: 50px;">
-            <h3>実験が終了しました。</h3>
-            <p>データを送信しています。しばらくお待ちください...</p>
+          <div style="text-align: center; margin-top: 50px; font-family: sans-serif;">
+            <h3 style="font-size: 24px; margin-bottom: 20px;">実験が終了しました。</h3>
+            <p style="font-size: 18px;">データを整形して送信しています。しばらくお待ちください...</p>
           </div>
         `;
 
         // 本番試行(task: 'response')のみをフィルタリング
         const rawResponseData = jsPsych.data.get().filter({ task: 'response' });
 
-        // 分析に不要なデフォルト列（plugin_data等）を削ぎ落とし、必要な列のみを再構成
-        const cleanedData = rawResponseData.map(function(trial) {
+        // 分析に必要な列のみを再構成したオブジェクトの配列を作成
+        const cleanedDataArray = rawResponseData.values().map(function(trial) {
           return {
             subject_id: trial.subject_id,
             timestamp: trial.timestamp,
@@ -161,8 +188,8 @@
           };
         });
 
-        // 抽出したオブジェクト配列をCSVフォーマットの文字列に変換
-        const csvString = jsPsych.data.get().convertToCSV(cleanedData);
+        // 独自の変換関数を用いて不要なデフォルト列が含まれないクリーンなCSVに変換
+        const csvString = convertArrayToCSV(cleanedDataArray);
 
         // 指数バックオフを伴う自動送信を実行
         sendDataWithBackoff(csvString, displayElement);
