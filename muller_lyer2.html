@@ -67,7 +67,7 @@
 
     /* ボタン・スタイリング (ピンクテーマ) */
     .jspsych-btn {
-      padding: 12px 32px;
+      padding: 14px 36px; /* モバイルでのタップに備えてタップ領域を少し拡大 */
       font-size: 16px;
       font-weight: 600;
       border-radius: 8px;
@@ -78,6 +78,8 @@
       transition: all 0.2s ease;
       margin-top: 16px;
       box-shadow: 0 4px 6px -1px rgba(236, 72, 153, 0.2);
+      display: inline-block;
+      text-decoration: none;
     }
     .jspsych-btn:hover {
       background-color: #db2777; /* ホバー時は少し濃いピンク (Pink-600) */
@@ -168,8 +170,8 @@
     input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 24px;
-      height: 24px;
+      width: 28px; /* モバイルでつまみやすいように少し拡大 */
+      height: 28px;
       border-radius: 50%;
       background: #ec4899; /* 動かすボタン（つまみ）をピンクに */
       cursor: pointer;
@@ -415,14 +417,23 @@
             </ul>
             <p><strong>【あなたの課題】</strong><br>
             下の比較図形の水平線の長さが、上の基準図形の長さと<strong>「見た目の上で全く同じ」</strong>に見えるように、スライダーを動かして調整してください。</p>
-            <p>※ スライダーのピンクのツマミをドラッグするか、スライダーを選択した状態でキーボードの <span class="kbd-key">←</span> <span class="kbd-key">→</span> キーを使うと細かく調整できます。</p>
-            <p>ちょうど良い長さに調整できたら、スライダー下部のピンク色の<strong>「決定」ボタン</strong>を押して次の試行に進んでください。全部で <strong>12試行</strong> あります。</p>
-            <p style="text-align: center; color: #ec4899; font-weight: bold; margin-top: 24px; animation: pulse 2s infinite;">
-              スペースキーを押すと実験を開始します。
-            </p>
+            <p>※ スライダーのピンクのツマミをドラッグするか、キーボードの <span class="kbd-key">←</span> <span class="kbd-key">→</span> キーを使うと細かく調整できます。</p>
+            <p>ちょうど良い長さに調整できたら、下部のピンク色の<strong>「決定」ボタン</strong>を押して次の試行に進んでください。全部で <strong>12試行</strong> あります。</p>
+            <div style="text-align: center; margin-top: 32px;">
+              <button class="jspsych-btn" id="start-exp-btn">実験をスタートする</button>
+              <p style="font-size: 12px; color: #64748b; margin-top: 12px;">（キーボードのスペースキーを押すことでも開始できます）</p>
+            </div>
           </div>
         `,
-        choices: [' '],
+        choices: [' '], // スペースキーによる開始も許可
+        on_load: function() {
+          const startBtn = document.getElementById('start-exp-btn');
+          if (startBtn) {
+            startBtn.addEventListener('click', function() {
+              jsPsych.finishTrial();
+            });
+          }
+        },
         post_trial_gap: 800
       };
       timeline.push(instructions);
@@ -592,15 +603,24 @@
                 </h2>
                 <p style="margin: 16px 0; font-size: 16px;">現在、全${TOTAL_TRIALS}試行のうち <strong>6試行</strong> が終了しました。</p>
                 <p style="color: #64748b;">少し画面から目を離して休めたり、肩の力を抜いてリフレッシュしてください。</p>
-                <div style="background-color: #fdf2f8; padding: 12px; border-radius: 8px; border: 1px solid #fbcfe8; margin-top: 24px;">
+                <div style="background-color: #fdf2f8; padding: 12px; border-radius: 8px; border: 1px solid #fbcfe8; margin-top: 24px; display: inline-block;">
                   <span style="font-weight: 600; color: #db2777;">進捗率: 50%完了</span>
                 </div>
-                <p style="text-align: center; color: #ec4899; font-weight: bold; margin-top: 32px; animation: pulse 2s infinite;">
-                  準備ができたら、スペースキーを押して後半をスタートしましょう！
-                </p>
+                <div style="text-align: center; margin-top: 32px;">
+                  <button class="jspsych-btn" id="resume-exp-btn">後半をスタートする</button>
+                  <p style="font-size: 12px; color: #64748b; margin-top: 12px;">（キーボードのスペースキーを押すことでも再開できます）</p>
+                </div>
               </div>
             `,
-            choices: [' '],
+            choices: [' '], // スペースキーによる再開も許可
+            on_load: function() {
+              const resumeBtn = document.getElementById('resume-exp-btn');
+              if (resumeBtn) {
+                resumeBtn.addEventListener('click', function() {
+                  jsPsych.finishTrial();
+                });
+              }
+            },
             post_trial_gap: 1000
           };
           timeline.push(rest_trial);
