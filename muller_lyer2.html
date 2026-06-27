@@ -249,10 +249,17 @@
       100% { transform: rotate(360deg); }
     }
 
-    /* 脈動アニメーション */
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.02); opacity: 0.9; }
+    /* 警告エリアの装飾 */
+    .warning-box {
+      background-color: #fffbeb;
+      border: 1px solid #fef3c7;
+      color: #b45309;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: left;
+      margin: 16px 0;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -261,8 +268,8 @@
   <div id="jspsych-target"></div>
 
   <script>
-    // 【GAS接続の設定】
-    const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzW_qaCnZ_b5B4v7898O4dPSJM9UUKosew0efoSdpfUl2jartaoxvRB4I_h9CHncwe43Q/exec';
+    // ⚠️【変更済】新しいGASウェブアプリのURLを適用しました
+    const GAS_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwfX_NJcQk8sdcZ728PxzP6oVU90dV6ZSC2Q26nVrajdUgCrIgOzNe7R3urWlbFJfGm/exec';
 
     window.addEventListener('load', function() {
 
@@ -325,7 +332,8 @@
       const jsPsych = initJsPsych({
         display_element: 'jspsych-target',
         on_finish: function() {
-          displayResults();
+          // すべての試行が終了した時点で、画面表示を書き換えて送信処理を実行
+          sendDataAndDisplayStatus();
         }
       });
 
@@ -349,7 +357,7 @@
 
       const timeline = [];
 
-      // 0. 学籍番号入力画面
+      // 0. 学籍番号入力画面 (参加者情報の追加)
       const student_id_trial = {
         type: HtmlKeyboardResponsePlugin,
         stimulus: `
@@ -438,7 +446,7 @@
       };
       timeline.push(instructions);
 
-      // ミュラー・リヤー錯視刺激の描画関数
+      // ミュラー・リヤー錯視刺激の描画関数 (既存ロジックを完全維持)
       function drawMullerLyer(ctx, cx, cy, length, featherLength, angleDeg, inward) {
         const halfLen = length / 2;
         const startX = cx - halfLen;
@@ -551,7 +559,7 @@
               };
             }
             
-            // スライダー操作時の再描画トリガー
+            // スライダー操作時の再描画トリガー (リアルタイム再描画システム)
             if (slider && canvas) {
               const ctx = canvas.getContext('2d');
               const updateCanvas = function() {
@@ -585,6 +593,9 @@
               slider._keyboardCleanup();
             }
 
+            // 要件に基づく試行データの定義
+            data.subject_id = jsPsych.data.get().values()[0]?.student_id || "未登録";
+            data.timestamp = jsPsych.data.get().values()[0]?.timestamp || new Date().toISOString();
             data.pse = data.response;
             data.error_amount = data.response - STIM_STANDARD_LENGTH;
           }
@@ -627,59 +638,18 @@
         }
       });
 
-      // 3. 結果表示 & GASデータ送信
-      function displayResults() {
+      // 3. データ送信 & 画面切り替え制御関数 (指示通りのDOM更新処理)
+      function sendDataAndDisplayStatus() {
+        const displayElement = jsPsych.getDisplayElement();
+        
+        // 反応データのみを抽出 (その他のメタデータや命令試行、休憩試行は自動的に除外)
         const trials = jsPsych.data.get().filter({task: 'adjustment'}).values();
         
-        const firstTrial = jsPsych.data.get().values()[0];
-        const studentId = firstTrial?.student_id || "未登録";
-        const timestamp = firstTrial?.timestamp || new Date().toISOString();
-
-        // 集計用構造
-        const results = {};
-        factors.angle.forEach(a => {
-          factors.feather_length.forEach(f => {
-            results[`${a}deg_${f}px`] = {
-              angle: a,
-              length: f,
-              values: [],
-              sum: 0
-            };
-          });
-        });
-
-        trials.forEach(t => {
-          const key = `${t.angle}deg_${t.wing_length}px`;
-          if (results[key]) {
-            results[key].values.push(t.pse);
-            results[key].sum += t.pse;
-          }
-        });
-
-        let tableRows = '';
-        Object.keys(results).forEach(key => {
-          const cond = results[key];
-          const avg = cond.values.length > 0 ? (cond.sum / cond.values.length).toFixed(1) : 0;
-          const illusion = (avg - STIM_STANDARD_LENGTH).toFixed(1);
-          const sign = illusion > 0 ? '+' : '';
-
-          tableRows += `
-            <tr>
-              <td style="font-weight: 500;">外向き（下）</td>
-              <td>${cond.angle} 度</td>
-              <td>${cond.length} px</td>
-              <td>200 px</td>
-              <td style="font-weight: bold; color: #ec4899;">${avg} px</td>
-              <td style="font-weight: bold; color: ${illusion > 0 ? '#ef4444' : '#10b981'};">${sign}${illusion} px</td>
-            </tr>
-          `;
-        });
-
-        // 送信用データ
+        // 分析に最低限必要な列のみにマッピング・定義
         const exportData = trials.map(t => {
           return {
-            subject_id: studentId,
-            timestamp: timestamp,
+            subject_id: t.subject_id,
+            timestamp: t.timestamp,
             angle: t.angle,
             wing_length: t.wing_length,
             pse: t.pse,
@@ -687,106 +657,119 @@
           };
         });
 
-        const finalResultsHTML = `
-          <div class="instructions" style="text-align: center;">
-            <h2 style="margin-bottom: 12px; color: #db2777;">🎉 実験完了 🎉</h2>
-            <p style="color: #64748b; margin-top: 0; margin-bottom: 20px;">お疲れ様でした。すべての試行が終了しました。</p>
-            
-            <div style="background-color: #fdf2f8; padding: 12px 24px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 24px; border: 1px solid #fbcfe8;">
-              <span style="font-size: 14px; font-weight: 600; color: #475569;">登録された識別ID:</span>
-              <span style="font-size: 16px; font-weight: 700; color: #ec4899;">${studentId}</span>
-            </div>
-            
-            <!-- GAS 保存ステータス -->
-            <div id="gas-status-container" style="margin-bottom: 24px; padding: 16px; border-radius: 12px; background-color: #fdf2f8; border: 1px solid #fbcfe8; max-width: 520px; margin-left: auto; margin-right: auto; box-sizing: border-box; text-align: center;">
-              <p id="gas-status-message" style="margin: 0; font-weight: 600; color: #db2777; font-size: 14px;">データを自動保存しています...</p>
-              <div id="gas-spinner" class="spinner"></div>
-              <button id="gas-retry-btn" class="jspsych-btn jspsych-btn-secondary" style="display: none; margin-top: 12px; padding: 8px 16px; font-size: 13px;">もう一度保存する</button>
-            </div>
-
-            <p style="text-align: left; font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">📊 あなたの調整平均値</p>
-            <div class="result-table-container">
-              <table class="result-table">
-                <thead>
-                  <tr>
-                    <th>羽の形状</th>
-                    <th>羽の角度</th>
-                    <th>羽の長さ</th>
-                    <th>基準(上)</th>
-                    <th>調整平均値(下)</th>
-                    <th>錯視量</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${tableRows}
-                </tbody>
-              </table>
-            </div>
-
-            <p style="font-size: 13px; color: #64748b; text-align: left; line-height: 1.6; margin-bottom: 24px;">
-              ※ 基準である上の図形（内向き羽）は 200 px 固定です。一般に、下の図形（外向き羽）は実際よりも長く見えやすいため、物理的には短く（200 pxより小さく）調整される傾向（錯視効果）があります。
-            </p>
-
-            <button class="jspsych-btn" onclick="location.reload();">実験を最初からやり直す</button>
+        // 状態「データを送信中です...」のロード画面を表示
+        displayElement.innerHTML = `
+          <div class="instructions" style="text-align: center; padding: 40px 20px;">
+            <h2 style="color: #db2777; margin-bottom: 16px;">データを送信中です...</h2>
+            <p style="color: #64748b; font-size: 15px;">実験結果を自動保存しています。このまましばらくお待ちください。</p>
+            <div class="spinner"></div>
           </div>
         `;
 
-        document.getElementById('jspsych-target').innerHTML = finalResultsHTML;
-
-        // データ送信実行
-        sendToGAS(exportData);
-      }
-
-      // GAS 送信関数
-      function sendToGAS(payloadData) {
-        const container = document.getElementById('gas-status-container');
-        const message = document.getElementById('gas-status-message');
-        const spinner = document.getElementById('gas-spinner');
-        const retryBtn = document.getElementById('gas-retry-btn');
-
-        if (!GAS_WEBAPP_URL || GAS_WEBAPP_URL.includes('ここに手順')) {
-          container.style.backgroundColor = '#fffbeb';
-          container.style.borderColor = '#fde68a';
-          message.style.color = '#d97706';
-          message.innerHTML = '⚠️ GAS WebApp URL が未設定のため、データの自動保存はスキップされました。';
-          spinner.style.display = 'none';
-          return;
-        }
-
-        container.style.backgroundColor = '#fdf2f8';
-        container.style.borderColor = '#fbcfe8';
-        message.style.color = '#db2777';
-        message.textContent = 'データをGoogleスプレッドシートに送信中...';
-        spinner.style.display = 'block';
-        retryBtn.style.display = 'none';
-
+        // no-cors環境下でGASが確実に解析できるよう、送信データのヘッダーを最適化 (text/plain で実体を文字列送信)
         fetch(GAS_WEBAPP_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'text/plain; charset=utf-8'
           },
-          body: JSON.stringify(payloadData)
+          body: JSON.stringify(exportData)
         })
         .then(() => {
-          container.style.backgroundColor = '#fdf2f8';
-          container.style.borderColor = '#fbcfe8';
-          message.style.color = '#db2777';
-          message.textContent = '✅ データの自動保存に成功しました！';
-          spinner.style.display = 'none';
+          // ※no-corsの制限上、送信リクエスト自体がブラウザから発信されればthenに進みます。
+          // ユーザーへのフィードバックとして、注意書き（スプレッドシートの確認案内）を合わせて表示します。
+          displayElement.innerHTML = `
+            <div class="instructions" style="text-align: center; padding: 40px 20px;">
+              <h2 style="color: #db2777; margin-bottom: 16px;">🎉 実験終了 🎉</h2>
+              <p style="font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">ご協力ありがとうございました。</p>
+              
+              <div style="background-color: #fdf2f8; padding: 16px 24px; border-radius: 12px; display: inline-block; margin-bottom: 24px; border: 1px solid #fbcfe8; text-align: left; max-width: 550px;">
+                <span style="font-size: 14px; font-weight: 600; color: #475569; display: block; margin-bottom: 6px; text-align: center;">💾 送信手続きを完了しました</span>
+                <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.6;">
+                  ※もしスプレッドシートにデータが反映されていない場合は、以下の項目を確認してください：
+                  <br>・GASの公開設定が <strong>「全員（Anyone）」</strong> になっているか
+                  <br>・コード内の <strong>GAS_WEBAPP_URL</strong> が正しく更新されているか
+                </p>
+              </div>
+
+              <div>
+                <button class="jspsych-btn" onclick="location.reload();">もう一度最初から行う</button>
+              </div>
+            </div>
+          `;
         })
         .catch((error) => {
           console.error('GAS Send Error:', error);
-          container.style.backgroundColor = '#fef2f2';
-          container.style.borderColor = '#fecaca';
-          message.style.color = '#b91c1c';
-          message.innerHTML = '❌ データの保存に失敗しました。<br><span style="font-size: 12px; font-weight: normal; color: #ef4444;">通信エラーまたはタイムアウトが発生しました。</span>';
-          spinner.style.display = 'none';
+          // 完全なネットワークオフラインなどの理由でrejectされた場合のフェールバック画面
+          let tableRows = '';
           
-          retryBtn.style.display = 'inline-block';
-          retryBtn.onclick = function() {
-            sendToGAS(payloadData);
-          };
+          // 簡易的な集計処理
+          const summary = {};
+          factors.angle.forEach(a => {
+            factors.feather_length.forEach(f => {
+              summary[`${a}_${f}`] = { angle: a, len: f, values: [] };
+            });
+          });
+          trials.forEach(t => {
+            const k = `${t.angle}_${t.wing_length}`;
+            if (summary[k]) summary[k].values.push(t.pse);
+          });
+
+          Object.keys(summary).forEach(k => {
+            const cond = summary[k];
+            const avg = cond.values.length > 0 ? (cond.values.reduce((a,b)=>a+b, 0) / cond.values.length).toFixed(1) : 0;
+            const illusion = (avg - STIM_STANDARD_LENGTH).toFixed(1);
+            const sign = illusion > 0 ? '+' : '';
+            tableRows += `
+              <tr>
+                <td style="font-weight: 500;">外向き（下）</td>
+                <td>${cond.angle} 度</td>
+                <td>${cond.len} px</td>
+                <td>200 px</td>
+                <td style="font-weight: bold; color: #ec4899;">${avg} px</td>
+                <td style="font-weight: bold; color: ${illusion > 0 ? '#ef4444' : '#10b981'};">${sign}${illusion} px</td>
+              </tr>
+            `;
+          });
+
+          displayElement.innerHTML = `
+            <div class="instructions" style="text-align: center;">
+              <h2 style="color: #ef4444; margin-bottom: 12px;">⚠️ 通信エラー</h2>
+              <p style="color: #64748b; margin-top: 0; margin-bottom: 20px;">データの送信中にエラーが発生しました。ネットワークの接続状態を確認してください。</p>
+              
+              <div style="margin-bottom: 24px;">
+                <button class="jspsych-btn jspsych-btn-secondary" id="retry-send-btn">もう一度送信する</button>
+              </div>
+
+              <p style="text-align: left; font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 8px;">📊 今回の測定結果</p>
+              <div class="result-table-container">
+                <table class="result-table">
+                  <thead>
+                    <tr>
+                      <th>羽の形状</th>
+                      <th>羽の角度</th>
+                      <th>羽の長さ</th>
+                      <th>基準(上)</th>
+                      <th>調整平均値(下)</th>
+                      <th>錯視量</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${tableRows}
+                  </tbody>
+                </table>
+              </div>
+              <p style="text-align: left; font-size: 12px; color: #64748b;">
+                ※自動保存をやり連ねるには、上記の「もう一度送信する」ボタンを押してください。
+              </p>
+              <button class="jspsych-btn" onclick="location.reload();" style="margin-top:20px;">実験を最初からやり直す</button>
+            </div>
+          `;
+
+          // リトライボタンに送信イベントを再バインド
+          document.getElementById('retry-send-btn').addEventListener('click', function() {
+            sendDataAndDisplayStatus();
+          });
         });
       }
 
